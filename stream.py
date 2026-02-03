@@ -17,7 +17,8 @@ with col_left:
     # 데이터 로드 (가장 먼저!)
     users = pd.read_csv('users_preprocessed.csv', parse_dates=['created_at'])
 
-events = pd.read_csv('events_preprocessed.csv', parse_dates=['created_at'])
+events = pd.read_parquet("events_preprocessed.parquet")
+events["created_at"] = pd.to_datetime(events["created_at"], errors="coerce")
 
 # 전체 데이터 사용
 filtered_users = users.copy()
