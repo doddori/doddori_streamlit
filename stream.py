@@ -9,6 +9,16 @@ import plotly.express as px
 
 st.set_page_config(page_title="통합 데이터 분석 대시보드", layout="wide")  # 반드시 첫 Streamlit 명령
 
+@st.cache_data
+def load_users():
+    return pd.read_csv("users_preprocessed.csv", parse_dates=["created_at"])
+
+@st.cache_data
+def load_events():
+    df = pd.read_parquet("events_preprocessed.parquet")
+    df["created_at"] = pd.to_datetime(df["created_at"], errors="coerce")
+    return df
+
 # 컬럼 분할 먼저!
 col_left, col_right = st.columns([8, 3])
 
@@ -845,7 +855,10 @@ with region_tab:
                 st.plotly_chart(fig_revisit_traffic, use_container_width=True, key="region_tab_traffic_revisit")
 
     # 시간대별 이벤트 발생 추이 (라인 차트)
-    events = pd.read_csv('events_preprocessed.csv', parse_dates=['created_at'])
+    # events는 위에서 이미 parquet로 로드했으니, 여기서는 다시 읽지 말고 filtered_events를 사용
+    events_for_hourly = filtered_events.dropna(subset=["user_id"]).copy()
+    events_for_hourly["hour"] = events_for_hourly["created_at"].dt.hour
+    hourly_counts = events_for_hourly.groupby(["hour", "event_type"]).size().unstack(fill_value=0)
     events = events[events['user_id'].notnull()]
     events['hour'] = pd.to_datetime(events['created_at']).dt.hour
     hourly_counts = events.groupby(['hour', 'event_type']).size().unstack(fill_value=0)
