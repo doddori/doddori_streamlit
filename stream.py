@@ -19,16 +19,24 @@ def load_events():
     df["created_at"] = pd.to_datetime(df["created_at"], errors="coerce")
     return df
 
+@st.cache_data
+def load_order_items():
+    return pd.read_csv("order_items_preprocessed.csv", parse_dates=["created_at"], infer_datetime_format=True)
+
+@st.cache_data
+def load_products():
+    return pd.read_csv("products_preprocessed.csv")
+
+
 # 컬럼 분할 먼저!
 col_left, col_right = st.columns([8, 3])
 
 with col_left:
     st.title("통합 데이터 분석 대시보드")
     # 데이터 로드 (가장 먼저!)
-    users = pd.read_csv('users_preprocessed.csv', parse_dates=['created_at'])
+    users = load_users()
 
-events = pd.read_parquet("events_preprocessed.parquet")
-events["created_at"] = pd.to_datetime(events["created_at"], errors="coerce")
+events = load_events()
 
 # 전체 데이터 사용
 filtered_users = users.copy()
@@ -509,7 +517,7 @@ with purchase_tab:
     # 3행: 1회/2회/3회 이상 구매자 비율 (아래 줄)
     # 실제 데이터로 집계
     if 'order_items' not in st.session_state:
-        order_items = pd.read_csv('order_items_preprocessed.csv')
+        order_items = load_order_items()
         st.session_state['order_items'] = order_items
     else:
         order_items = st.session_state['order_items']
@@ -538,13 +546,13 @@ with purchase_tab:
     # 반복구매자 프로파일링: 구매주기 짧은 유저 vs 긴 유저 비교
     st.subheader("반복구매자 프로파일링: 구매주기 짧은 유저 vs 긴 유저")
     if 'order_items' not in st.session_state:
-        order_items = pd.read_csv('order_items_preprocessed.csv')
+        order_items = load_order_items()
         st.session_state['order_items'] = order_items
     else:
         order_items = st.session_state['order_items']
 
     if 'products' not in st.session_state:
-        products = pd.read_csv('products_preprocessed.csv')
+        products = load_products()
         st.session_state['products'] = products
     else:
         products = st.session_state['products']
@@ -658,13 +666,13 @@ with product_tab:
     st.header("제품 분석")
     # 데이터 로드 및 타입 맞추기
     if 'order_items' not in st.session_state:
-        order_items = pd.read_csv('order_items_preprocessed.csv')
+        order_items = load_order_items()
         st.session_state['order_items'] = order_items
     else:
         order_items = st.session_state['order_items']
 
     if 'products' not in st.session_state:
-        products = pd.read_csv('products_preprocessed.csv')
+        products = load_products()
         st.session_state['products'] = products
     else:
         products = st.session_state['products']
@@ -856,25 +864,32 @@ with region_tab:
 
     # 시간대별 이벤트 발생 추이 (라인 차트)
     # events는 위에서 이미 parquet로 로드했으니, 여기서는 다시 읽지 말고 filtered_events를 사용
+        # 시간대별 이벤트 발생 추이 (라인 차트)
+    # events는 상단에서 parquet로 로드했으므로, 여기서는 filtered_events를 그대로 사용합니다.
     events_for_hourly = filtered_events.dropna(subset=["user_id"]).copy()
     events_for_hourly["hour"] = events_for_hourly["created_at"].dt.hour
     hourly_counts = events_for_hourly.groupby(["hour", "event_type"]).size().unstack(fill_value=0)
-    events = events[events['user_id'].notnull()]
-    events['hour'] = pd.to_datetime(events['created_at']).dt.hour
-    hourly_counts = events.groupby(['hour', 'event_type']).size().unstack(fill_value=0)
+
     fig_hourly = go.Figure()
     for col in hourly_counts.columns:
-        fig_hourly.add_trace(go.Scatter(x=hourly_counts.index, y=hourly_counts[col], mode='lines+markers', name=col))
+        fig_hourly.add_trace(
+            go.Scatter(
+                x=hourly_counts.index,
+                y=hourly_counts[col],
+                mode="lines+markers",
+                name=str(col),
+            )
+        )
     fig_hourly.update_layout(
         title="시간대별 이벤트 발생 추이",
         xaxis_title="시간(0~23시)",
         yaxis_title="이벤트 수",
-        height=400
+        height=400,
     )
     st.plotly_chart(fig_hourly, use_container_width=True)
 
     # 이벤트별 전체 건수 (막대 차트)
-    event_counts = events['event_type'].value_counts()
+    event_counts = events_for_hourly['event_type'].value_counts()
     fig_event_bar = go.Figure()
     fig_event_bar.add_bar(
         x=event_counts.index.astype(str),
@@ -1026,12 +1041,12 @@ with revisit_tab:
         )
         # order_items와 products 조인
         if 'order_items' not in st.session_state:
-            order_items = pd.read_csv('order_items_preprocessed.csv')
+            order_items = load_order_items()
             st.session_state['order_items'] = order_items
         else:
             order_items = st.session_state['order_items']
         if 'products' not in st.session_state:
-            products = pd.read_csv('products_preprocessed.csv')
+            products = load_products()
             st.session_state['products'] = products
         else:
             products = st.session_state['products']
@@ -1091,12 +1106,12 @@ with revisit_tab:
             how='left'
         )
         if 'order_items' not in st.session_state:
-            order_items = pd.read_csv('order_items_preprocessed.csv')
+            order_items = load_order_items()
             st.session_state['order_items'] = order_items
         else:
             order_items = st.session_state['order_items']
         if 'products' not in st.session_state:
-            products = pd.read_csv('products_preprocessed.csv')
+            products = load_products()
             st.session_state['products'] = products
         else:
             products = st.session_state['products']
